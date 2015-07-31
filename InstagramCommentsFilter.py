@@ -1,47 +1,45 @@
 import sys
 import csv
+import collections
 
 __author__ = 'mfv'
 
 
 class FilterCoveyor:
     def __init__(self):
-        self.wordFilters = []
-        self.messageFilters = []
+        self.wordModifyFilters = []  # f(str) -> iterable
+        self.wordReplaceFilters = []  # f(str) -> bool
+        self.messageFilters = []  # f(str) -> str
 
     def apply_whole_filters_on_message(self, message):
-        filtered = message
-        for currentFilter in self.wordFilters:
-            filtered = self.apply_word_filter_on_message(filtered, currentFilter)
-        for currentFilter in self.messageFilters:
-            filtered = self.apply_message_filter_on_message(filtered, currentFilter)
-        return filtered
-
-    @staticmethod
-    def apply_word_filter_on_message(message, predicate):
-        """
-        apply predicate to each word if message
-        :rtype : filtrated message
-        :param message: some message to filter
-        :param predicate: filter(str) -> bool
-        """
-        words = message.split()
-        return " ".join(
-            filter(lambda o: True if o is not None else False, map(lambda s: s if predicate(s) else None, words)))
-
-    @staticmethod
-    def apply_message_filter_on_message(message, f):
-        """
-        apply f to whole message
-        :rtype : filtered message
-        :param message: some message to filter
-        :param f: filter(message) -> message
-        """
-        return f(message)
+        tokens = message.split()
+        modified = []
+        for f in self.wordModifyFilters:
+            for token in tokens:
+                currentResult = f(token)
+                if isinstance(currentResult, collections.Iterable):
+                    modified.extend(currentResult)
+                else:
+                    modified.append(currentResult)
+        tokens = modified
+        modified = []
+        for f in self.wordReplaceFilters:
+            for token in tokens:
+                if f(token):
+                    modified.append(token)
+        modified = " ".join(modified)
+        for f in self.messageFilters:
+            modified = f(modified)
+        return modified
 
 
 def filter_person_link(word) -> bool:
     return True if not word.startswith("@") else False
+
+
+def filter_hashtag_link(word) -> iter:
+    words = word.split("#")
+    return filter(lambda s: True if len(s) > 0 else False, words)
 
 
 def filter_add_endline(message) -> str:
@@ -52,8 +50,9 @@ def main():
     sourceFileFolder = sys.argv[1]  # file-path to csv comments
     destFileFolder = sys.argv[2]  # file-path to clear comments
     filters = FilterCoveyor()
+    filters.wordModifyFilters.append(filter_hashtag_link)
+    filters.wordReplaceFilters.append(filter_person_link)
     filters.messageFilters.append(filter_add_endline)
-    filters.wordFilters.append(filter_person_link)
     with open(sourceFileFolder, "rt") as source:
         with open(destFileFolder, "w") as dest:
             csvReader = csv.reader(source)
@@ -67,4 +66,8 @@ def main():
 
 
 if __name__ == '__main__':
+    l = []
+    l.extend([2])
+    l.extend([[4, 5, 6]])
+    print(isinstance(l, collections.Iterable))
     main()
